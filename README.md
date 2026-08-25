@@ -20,7 +20,10 @@ an hour per shell session.
 omarchy plugin add https://github.com/cnores/coffeecat-omarchy --enable
 ```
 
-Then bind a key in `~/.config/hypr/bindings.lua` (pick any free combo):
+Then add the **CoffeeCat** widget (a coffee-cup button) to your bar through
+Omarchy's bar settings — left-click opens the overlay, right-click opens
+coffeecat.app. Or bind a key in `~/.config/hypr/bindings.lua` (pick any free
+combo):
 
 ```lua
 o.bind("SUPER + CTRL + C", "CoffeeCat places", "omarchy-shell shell toggle coffeecat.places")
