@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "coffeecat.places",
   "name": "CoffeeCat Places",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Carl Noresson",
   "license": "MIT",
   "description": "Browse CoffeeCat coffee shops and coworking spaces by city",

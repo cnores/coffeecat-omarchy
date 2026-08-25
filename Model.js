@@ -84,7 +84,8 @@ function cityRows(cities, query, limit) {
       meta: placeCount(c.venue_count),
       url: "",
       citySlug: String(c.city_slug),
-      countrySlug: String(c.country_slug || "")
+      countrySlug: String(c.country_slug || ""),
+      venueIndex: -1
     })
   }
 
@@ -127,11 +128,55 @@ function venueRows(venues, query, typeKey, limit) {
       meta: ratingText(v),
       url: v.web_path ? BASE_URL + String(v.web_path) : "",
       citySlug: "",
-      countrySlug: ""
+      countrySlug: "",
+      venueIndex: i
     })
   }
 
   return out
+}
+
+function coverImageUrl(venue) {
+  var src = String((venue && venue.cover_image) || "")
+  if (src.indexOf("http") === 0) return src
+  if (src.charAt(0) === "/") return BASE_URL + src
+  return ""
+}
+
+var ratingLabels = [
+  ["coffee", "coffee"],
+  ["internet", "wifi"],
+  ["quietness", "quiet"],
+  ["comfortability", "comfort"],
+  ["food", "food"],
+  ["expensiveness", "price"]
+]
+
+function ratingsLine(venue) {
+  var parts = []
+  for (var i = 0; i < ratingLabels.length; i++) {
+    var value = venue ? venue[ratingLabels[i][0]] : null
+    if (value !== undefined && value !== null)
+      parts.push(ratingLabels[i][1] + " " + Number(value).toFixed(1))
+  }
+  return parts.join(" · ")
+}
+
+function venueDetail(venue) {
+  var v = venue || {}
+  return {
+    title: String(v.name || ""),
+    subtitle: venueCaption(v),
+    description: String(v.description || ""),
+    address: String(v.address || ""),
+    ratings: ratingsLine(v),
+    wifiPassword: String(v.wifi_password || ""),
+    coverImage: coverImageUrl(v),
+    url: v.web_path ? BASE_URL + String(v.web_path) : "",
+    mapsLink: String(v.maps_link || ""),
+    website: String(v.website || ""),
+    reviewCount: Number(v.review_count) || 0
+  }
 }
 
 function findCityRow(cities, slug) {
@@ -156,6 +201,9 @@ if (typeof module !== "undefined") {
     venueCaption: venueCaption,
     ratingText: ratingText,
     venueRows: venueRows,
+    coverImageUrl: coverImageUrl,
+    ratingsLine: ratingsLine,
+    venueDetail: venueDetail,
     findCityRow: findCityRow
   }
 }

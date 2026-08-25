@@ -28,6 +28,8 @@ Item {
   property string loadError: ""
   property string pendingCitySlug: ""
   property string venuesUrl: ""
+  property var currentDetail: null
+  property bool wifiCopied: false
 
   readonly property int citiesCacheMs: 60 * 60 * 1000
 
@@ -57,6 +59,8 @@ Item {
     root.opened = true
     root.screen = "cities"
     root.currentCity = null
+    root.currentDetail = null
+    root.wifiCopied = false
     root.filterText = ""
     root.selectedIndex = 0
     root.cursorActive = true
@@ -230,10 +234,43 @@ Item {
     var row = displayModel.get(index)
     if (root.screen === "cities") {
       root.openCity({ title: row.title, caption: row.caption, citySlug: row.citySlug, countrySlug: row.countrySlug })
-    } else if (row.url) {
-      root.dismiss()
-      Quickshell.execDetached(["xdg-open", row.url])
+    } else {
+      root.openDetail(row.venueIndex)
     }
+  }
+
+  function openRowInBrowser(index) {
+    if (index < 0 || index >= displayModel.count) return
+    var row = displayModel.get(index)
+    if (row.url) root.openInBrowser(row.url)
+  }
+
+  function openInBrowser(url) {
+    root.dismiss()
+    Quickshell.execDetached(["xdg-open", url])
+  }
+
+  function openDetail(venueIndex) {
+    var venue = root.venues[venueIndex]
+    if (!venue) return
+    root.currentDetail = Model.venueDetail(venue)
+    root.wifiCopied = false
+    root.screen = "detail"
+  }
+
+  function closeDetail() {
+    root.currentDetail = null
+    root.wifiCopied = false
+    root.screen = "venues"
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  }
+
+  function copyWifi() {
+    var pw = root.currentDetail ? root.currentDetail.wifiPassword : ""
+    if (!pw) return
+    Quickshell.execDetached(["wl-copy", pw])
+    root.wifiCopied = true
+    wifiCopiedTimer.restart()
   }
 
   function headerPlaceholder() {
@@ -243,6 +280,11 @@ Item {
   }
 
   function statusLeftText() {
+    if (root.screen === "detail") {
+      var d = root.currentDetail
+      if (!d) return ""
+      return d.subtitle + (d.reviewCount ? " · " + d.reviewCount + (d.reviewCount === 1 ? " review" : " reviews") : "")
+    }
     if (root.loading) return "Loading…"
     if (root.loadError) return root.loadError
     if (root.screen === "cities") return displayModel.count + " cities"
@@ -251,6 +293,14 @@ Item {
   }
 
   function statusRightText() {
+    if (root.screen === "detail") {
+      if (root.wifiCopied) return "wifi password copied"
+      var d = root.currentDetail
+      var hints = "Enter page"
+      if (d && d.mapsLink) hints += " · M maps"
+      if (d && d.wifiPassword) hints += " · W wifi"
+      return hints + " · Esc back"
+    }
     return root.screen === "cities" ? "Enter to browse" : "Tab filters · Esc back"
   }
 
@@ -262,6 +312,12 @@ Item {
   }
 
   ListModel { id: displayModel }
+
+  Timer {
+    id: wifiCopiedTimer
+    interval: 1600
+    onTriggered: root.wifiCopied = false
+  }
 
   Process {
     id: citiesProc
@@ -320,6 +376,20 @@ Item {
 
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
+          if (root.screen === "detail") {
+            if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace) {
+              root.closeDetail()
+            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+              if (root.currentDetail && root.currentDetail.url) root.openInBrowser(root.currentDetail.url)
+            } else if (event.key === Qt.Key_M) {
+              if (root.currentDetail && root.currentDetail.mapsLink) root.openInBrowser(root.currentDetail.mapsLink)
+            } else if (event.key === Qt.Key_W) {
+              root.copyWifi()
+            }
+            event.accepted = true
+            return
+          }
+
           if (event.key === Qt.Key_Escape) {
             if (root.filterText) root.setFilter("")
             else if (root.screen === "venues") root.backToCities()
@@ -356,7 +426,8 @@ Item {
             root.selectAbsolute(displayModel.count - 1)
             event.accepted = true
           } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            if (root.cursorActive) root.activateIndex(root.selectedIndex)
+            if (root.cursorActive && root.screen === "venues" && (event.modifiers & Qt.ShiftModifier)) root.openRowInBrowser(root.selectedIndex)
+            else if (root.cursorActive) root.activateIndex(root.selectedIndex)
             else if (displayModel.count > 0) root.cursorActive = true
             event.accepted = true
           } else if (event.text && event.text.length === 1 && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127) {
@@ -384,9 +455,11 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: root.filterText || root.headerPlaceholder()
+            text: root.screen === "detail"
+              ? (root.currentDetail ? root.currentDetail.title : "")
+              : (root.filterText || root.headerPlaceholder())
             color: root.foreground
-            opacity: root.filterText ? 1 : 0.58
+            opacity: root.screen === "detail" || root.filterText ? 1 : 0.58
             font.family: root.fontFamily
             font.pixelSize: Style.font.heading
             elide: Text.ElideRight
@@ -428,6 +501,7 @@ Item {
 
           ListView {
             id: resultList
+            visible: root.screen !== "detail"
             anchors.fill: parent
             model: displayModel
             clip: true
@@ -514,9 +588,74 @@ Item {
           }
 
           Column {
+            visible: root.screen === "detail"
+            anchors.fill: parent
+            spacing: Style.spacing.md
+
+            Image {
+              width: parent.width
+              height: root.currentDetail && root.currentDetail.coverImage ? Style.space(170) : 0
+              visible: height > 0
+              source: root.currentDetail ? root.currentDetail.coverImage : ""
+              fillMode: Image.PreserveAspectCrop
+              asynchronous: true
+              smooth: true
+              clip: true
+            }
+
+            Text {
+              width: parent.width
+              visible: text.length > 0
+              text: root.currentDetail ? root.currentDetail.description : ""
+              color: root.foreground
+              opacity: 0.88
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              wrapMode: Text.WordWrap
+              maximumLineCount: 9
+              elide: Text.ElideRight
+            }
+
+            Text {
+              width: parent.width
+              visible: text.length > 0
+              text: root.currentDetail ? root.currentDetail.address : ""
+              color: root.foreground
+              opacity: 0.62
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
+              maximumLineCount: 2
+              elide: Text.ElideRight
+            }
+
+            Text {
+              width: parent.width
+              visible: text.length > 0
+              text: root.currentDetail ? root.currentDetail.ratings : ""
+              color: root.foreground
+              opacity: 0.8
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
+            Text {
+              width: parent.width
+              visible: text.length > 0
+              text: root.currentDetail && root.currentDetail.wifiPassword
+                ? "wifi password: " + root.currentDetail.wifiPassword
+                : ""
+              color: root.foreground
+              opacity: 0.8
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+
+          Column {
             anchors.centerIn: parent
             spacing: Style.space(8)
-            visible: displayModel.count === 0
+            visible: displayModel.count === 0 && root.screen !== "detail"
 
             Text {
               text: ""

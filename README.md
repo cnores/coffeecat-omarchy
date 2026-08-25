@@ -51,10 +51,15 @@ omarchy plugin enable coffeecat.places
 |-----|--------|
 | type | filter the list |
 | `↑` `↓` `PgUp` `PgDn` `Home` `End` | move |
-| `Enter` | open city / open place on coffeecat.app |
+| `Enter` | open city / view place details |
+| `Shift+Enter` | skip details, open place on coffeecat.app |
 | `Tab` / `Shift+Tab` | cycle venue-type filter (places screen) |
-| `Esc` | clear filter → back to cities → close |
+| `Esc` | clear filter → back → close |
 | `F5` | refetch |
+
+In the place details view: `Enter` opens the page on coffeecat.app, `M` opens
+the Google Maps link, `W` copies the wifi password (via `wl-copy`), and
+`Esc`/`Backspace` goes back to the list.
 
 ## Development
 
