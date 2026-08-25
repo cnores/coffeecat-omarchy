@@ -98,12 +98,29 @@ function venueCaption(venue) {
   return (venue.verified ? "✓ " : "") + parts.join(" · ")
 }
 
-function ratingText(venue) {
-  if (venue.internet !== undefined && venue.internet !== null)
-    return "wifi " + Number(venue.internet).toFixed(1)
-  if (venue.coffee !== undefined && venue.coffee !== null)
-    return "coffee " + Number(venue.coffee).toFixed(1)
-  return ""
+// One block glyph per rating attribute, in ratingLabels order (coffee, wifi,
+// quiet, comfort, food, price) — a tiny "personality chart" for the list.
+// Unrated attributes render as a mid dot; fully unrated venues get "".
+var SPARK_LEVELS = "▁▂▃▄▅▆▇█"
+
+function sparkGlyph(value) {
+  var n = Math.max(0, Math.min(5, Number(value)))
+  return SPARK_LEVELS.charAt(Math.round(n / 5 * (SPARK_LEVELS.length - 1)))
+}
+
+function ratingSparkline(venue) {
+  var any = false
+  var out = ""
+  for (var i = 0; i < ratingLabels.length; i++) {
+    var value = venue ? venue[ratingLabels[i][0]] : null
+    if (value === undefined || value === null) {
+      out += "·"
+    } else {
+      out += sparkGlyph(value)
+      any = true
+    }
+  }
+  return any ? out : ""
 }
 
 function venueRows(venues, query, typeKey, limit) {
@@ -125,7 +142,7 @@ function venueRows(venues, query, typeKey, limit) {
     out.push({
       title: String(v.name),
       caption: venueCaption(v),
-      meta: ratingText(v),
+      meta: ratingSparkline(v),
       url: v.web_path ? BASE_URL + String(v.web_path) : "",
       citySlug: "",
       countrySlug: "",
@@ -152,19 +169,71 @@ var ratingLabels = [
   ["expensiveness", "price"]
 ]
 
-function ratingsLine(venue) {
+// Reviews rate the same things under different keys than venues do.
+var reviewRatingLabels = [
+  ["coffee", "coffee"],
+  ["internet", "wifi"],
+  ["noise", "noise"],
+  ["comfort", "comfort"],
+  ["food", "food"],
+  ["price", "price"]
+]
+
+function labeledRatings(source, labels) {
   var parts = []
-  for (var i = 0; i < ratingLabels.length; i++) {
-    var value = venue ? venue[ratingLabels[i][0]] : null
+  for (var i = 0; i < labels.length; i++) {
+    var value = source ? source[labels[i][0]] : null
     if (value !== undefined && value !== null)
-      parts.push(ratingLabels[i][1] + " " + Number(value).toFixed(1))
+      parts.push(labels[i][1] + " " + Number(value).toFixed(1))
   }
   return parts.join(" · ")
+}
+
+function ratingsLine(venue) {
+  return labeledRatings(venue, ratingLabels)
+}
+
+function venueShowUrl(id) {
+  return BASE_URL + "/api/v1/venues/" + encodeURIComponent(String(id))
+}
+
+function parseReviews(raw) {
+  try {
+    var data = JSON.parse(String(raw || ""))
+    var list = data && data.reviews
+    return Array.isArray(list) ? list : []
+  } catch (e) {
+    return []
+  }
+}
+
+function reviewItems(reviews, limit) {
+  var values = Array.isArray(reviews) ? reviews : []
+  var max = clampLimit(limit, 20)
+  var out = []
+
+  for (var i = 0; i < values.length && out.length < max; i++) {
+    var r = values[i]
+    if (!r) continue
+
+    var text = String(r.description || "").trim()
+    if (!text) text = labeledRatings(r, reviewRatingLabels)
+    if (!text) continue
+
+    out.push({
+      author: String((r.user && r.user.name) || "Anonymous"),
+      meta: String(r.created_at || "").slice(0, 10),
+      text: text
+    })
+  }
+
+  return out
 }
 
 function venueDetail(venue) {
   var v = venue || {}
   return {
+    id: v.id !== undefined && v.id !== null ? String(v.id) : "",
     title: String(v.name || ""),
     subtitle: venueCaption(v),
     description: String(v.description || ""),
@@ -199,11 +268,14 @@ if (typeof module !== "undefined") {
     placeCount: placeCount,
     cityRows: cityRows,
     venueCaption: venueCaption,
-    ratingText: ratingText,
+    ratingSparkline: ratingSparkline,
     venueRows: venueRows,
     coverImageUrl: coverImageUrl,
     ratingsLine: ratingsLine,
     venueDetail: venueDetail,
+    venueShowUrl: venueShowUrl,
+    parseReviews: parseReviews,
+    reviewItems: reviewItems,
     findCityRow: findCityRow
   }
 }

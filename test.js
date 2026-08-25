@@ -10,7 +10,7 @@ const cities = [
 
 const venues = [
   {
-    name: "Coffee Place", venue_type: "coffee_shop", city_area: "Sukhumvit",
+    id: 7, name: "Coffee Place", venue_type: "coffee_shop", city_area: "Sukhumvit",
     verified: true, internet: 4.5, coffee: 4.0, web_path: "/places/thailand/bangkok/sukhumvit/v-coffee-place",
     description: "A great coffee shop", address: "123 Main St", wifi_password: "beans123",
     maps_link: "https://maps.google.com/?q=x", cover_image: "/rails/active_storage/cover.jpg", review_count: 3
@@ -52,9 +52,10 @@ assert.strictEqual(rows[0].url, Model.BASE_URL + "/places/thailand/bangkok/sukhu
 assert.strictEqual(rows[2].url, "", "missing web_path yields empty url")
 assert.strictEqual(rows[0].caption, "✓ Café · Sukhumvit")
 assert.strictEqual(rows[1].caption, "Coworking")
-assert.strictEqual(rows[0].meta, "wifi 4.5", "internet rating wins over coffee")
-assert.strictEqual(rows[1].meta, "coffee 3.5", "falls back to coffee rating")
-assert.strictEqual(rows[2].meta, "")
+assert.strictEqual(rows[0].meta, "▇▇····", "sparkline: coffee 4.0, wifi 4.5, rest unrated")
+assert.strictEqual(rows[1].meta, "▆·····", "sparkline: only coffee 3.5 rated")
+assert.strictEqual(rows[2].meta, "", "no ratings at all yields empty meta")
+assert.strictEqual(Model.ratingSparkline({ coffee: 5.0, internet: 0 }), "█▁····")
 
 assert.strictEqual(Model.venueRows(venues, "", "coworking_space", null).length, 1)
 assert.strictEqual(Model.venueRows(venues, "sukhumvit", "", null).length, 1, "matches city_area")
@@ -86,6 +87,26 @@ assert.strictEqual(d.mapsLink, "https://maps.google.com/?q=x")
 assert.strictEqual(d.reviewCount, 3)
 assert.strictEqual(Model.venueDetail({}).ratings, "")
 assert.strictEqual(Model.venueDetail(null).title, "")
+
+// reviews
+assert.strictEqual(Model.venueDetail(venues[0]).id, "7")
+assert.strictEqual(Model.venueShowUrl(7), Model.BASE_URL + "/api/v1/venues/7")
+const reviewsPayload = {
+  venue: {},
+  reviews: [
+    { description: "Great flat white", created_at: "2026-08-01T10:00:00Z", user: { name: "Ana" }, coffee: 5.0 },
+    { description: "", coffee: 4.0, internet: 3.0, user: null, created_at: "2026-07-15T09:00:00Z" },
+    { description: "   ", user: { name: "Bo" } }
+  ]
+}
+const items = Model.reviewItems(Model.parseReviews(JSON.stringify(reviewsPayload)), 20)
+assert.strictEqual(items.length, 2, "review with no text and no ratings is dropped")
+assert.strictEqual(items[0].author, "Ana")
+assert.strictEqual(items[0].meta, "2026-08-01")
+assert.strictEqual(items[0].text, "Great flat white")
+assert.strictEqual(items[1].author, "Anonymous")
+assert.strictEqual(items[1].text, "coffee 4.0 · wifi 3.0", "ratings-only review falls back to a ratings line")
+assert.deepStrictEqual(Model.parseReviews("junk"), [])
 
 // coverImageUrl variants
 assert.strictEqual(Model.coverImageUrl({ cover_image: "https://cdn.example/x.jpg" }), "https://cdn.example/x.jpg")

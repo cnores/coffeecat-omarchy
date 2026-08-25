@@ -58,8 +58,12 @@ omarchy plugin enable coffeecat.places
 | `F5` | refetch |
 
 In the place details view: `Enter` opens the page on coffeecat.app, `M` opens
-the Google Maps link, `W` copies the wifi password (via `wl-copy`), and
-`Esc`/`Backspace` goes back to the list.
+the Google Maps link, `W` copies the wifi password (via `wl-copy`), arrows
+scroll (reviews load below the description), and `Esc`/`Backspace` goes back.
+
+Each place in the list shows a rating sparkline like `▇▆▄▅·▃` — one bar per
+attribute in the order **coffee · wifi · quiet · comfort · food · price**
+(the same order as the ratings line in the details view); `·` means unrated.
 
 ## Development
 

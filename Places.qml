@@ -30,6 +30,9 @@ Item {
   property string venuesUrl: ""
   property var currentDetail: null
   property bool wifiCopied: false
+  property var detailReviews: []
+  property bool reviewsLoading: false
+  property string venueShowUrl: ""
 
   readonly property int citiesCacheMs: 60 * 60 * 1000
 
@@ -255,14 +258,36 @@ Item {
     if (!venue) return
     root.currentDetail = Model.venueDetail(venue)
     root.wifiCopied = false
+    root.detailReviews = []
     root.screen = "detail"
+    detailFlick.contentY = 0
+    if (root.currentDetail.id) {
+      venueProc.running = false
+      root.reviewsLoading = true
+      root.venueShowUrl = Model.venueShowUrl(root.currentDetail.id)
+      venueProc.running = true
+    }
+  }
+
+  function reviewsLoaded(raw) {
+    if (root.screen !== "detail") return
+    root.reviewsLoading = false
+    root.detailReviews = Model.reviewItems(Model.parseReviews(raw), 20)
   }
 
   function closeDetail() {
+    venueProc.running = false
     root.currentDetail = null
     root.wifiCopied = false
+    root.detailReviews = []
+    root.reviewsLoading = false
     root.screen = "venues"
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  }
+
+  function scrollDetail(delta) {
+    var maxY = Math.max(0, detailFlick.contentHeight - detailFlick.height)
+    detailFlick.contentY = Math.max(0, Math.min(maxY, detailFlick.contentY + delta))
   }
 
   function copyWifi() {
@@ -337,6 +362,15 @@ Item {
     }
   }
 
+  Process {
+    id: venueProc
+    command: ["curl", "-fsS", "--max-time", "10", root.venueShowUrl]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.reviewsLoaded(text)
+    }
+  }
+
   PanelWindow {
     id: panel
     visible: root.opened
@@ -385,6 +419,14 @@ Item {
               if (root.currentDetail && root.currentDetail.mapsLink) root.openInBrowser(root.currentDetail.mapsLink)
             } else if (event.key === Qt.Key_W) {
               root.copyWifi()
+            } else if (event.key === Qt.Key_Up) {
+              root.scrollDetail(-Style.space(48))
+            } else if (event.key === Qt.Key_Down) {
+              root.scrollDetail(Style.space(48))
+            } else if (event.key === Qt.Key_PageUp) {
+              root.scrollDetail(-detailFlick.height)
+            } else if (event.key === Qt.Key_PageDown) {
+              root.scrollDetail(detailFlick.height)
             }
             event.accepted = true
             return
@@ -563,8 +605,9 @@ Item {
                   anchors.right: parent.right
                   anchors.verticalCenter: parent.verticalCenter
                   text: row.meta
-                  color: row.hasCursor ? root.selectedText : root.foreground
-                  opacity: 0.62
+                  color: row.hasCursor ? root.selectedText
+                    : (root.screen === "venues" ? Color.accent : root.foreground)
+                  opacity: root.screen === "venues" ? 0.9 : 0.62
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
                 }
@@ -587,9 +630,18 @@ Item {
             }
           }
 
-          Column {
+          Flickable {
+            id: detailFlick
             visible: root.screen === "detail"
             anchors.fill: parent
+            contentWidth: width
+            contentHeight: detailColumn.height
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+
+            Column {
+            id: detailColumn
+            width: detailFlick.width
             spacing: Style.spacing.md
 
             Image {
@@ -649,6 +701,60 @@ Item {
               opacity: 0.8
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
+            }
+
+            Text {
+              width: parent.width
+              visible: root.detailReviews.length > 0
+              text: "Reviews"
+              color: root.foreground
+              opacity: 0.55
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
+            Repeater {
+              model: root.detailReviews
+
+              delegate: Column {
+                required property var modelData
+
+                width: detailColumn.width
+                spacing: Style.space(2)
+
+                Text {
+                  width: parent.width
+                  text: modelData.author + (modelData.meta ? " · " + modelData.meta : "")
+                  color: root.foreground
+                  opacity: 0.55
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  elide: Text.ElideRight
+                }
+
+                Text {
+                  width: parent.width
+                  text: modelData.text
+                  color: root.foreground
+                  opacity: 0.85
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                  maximumLineCount: 8
+                  elide: Text.ElideRight
+                }
+              }
+            }
+
+            Text {
+              width: parent.width
+              visible: root.reviewsLoading
+              text: "Loading reviews…"
+              color: root.foreground
+              opacity: 0.45
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
             }
           }
 
