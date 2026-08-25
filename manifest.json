@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "coffeecat.places",
+  "name": "CoffeeCat Places",
+  "version": "0.1.0",
+  "author": "Carl Noresson",
+  "license": "MIT",
+  "description": "Browse CoffeeCat coffee shops and coworking spaces by city",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Places.qml"
+  }
+}
